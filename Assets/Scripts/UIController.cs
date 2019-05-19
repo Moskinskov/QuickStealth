@@ -10,13 +10,15 @@ namespace Assets.Scripts
         [SerializeField] private GameObject menuUI;
         private bool gameOver;
         private bool menuOn;
-        private int thisSceneID;
+        [SerializeField] private int thisSceneID;
         private Player _player;
+        private int allSceneCount;
 
 
         private void Start()
         {
             thisSceneID = SceneManager.GetActiveScene().buildIndex;
+            allSceneCount = SceneManager.sceneCountInBuildSettings;
             if (thisSceneID > 0)
             {
                 winUI.SetActive(false);
@@ -91,7 +93,11 @@ namespace Assets.Scripts
         }
         public void NextLVLBttn()
         {
-            SceneManager.LoadScene(thisSceneID++);
+            thisSceneID = Mathf.Clamp(thisSceneID, 0, allSceneCount);
+            thisSceneID++;
+            if (thisSceneID == allSceneCount)
+                thisSceneID = 0;
+            SceneManager.LoadScene(thisSceneID);
         }
         public void StartBttn()
         {

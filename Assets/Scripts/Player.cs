@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Assets.Scripts
@@ -7,6 +8,7 @@ namespace Assets.Scripts
     public class Player : MonoBehaviour
     {
         [SerializeField] private float movementSpeed;
+        [SerializeField] private GameObject stepEffectGO;
 
         private float smoothMoveTime = 0.1f;
         private float turnSpeed = 8;
@@ -14,17 +16,28 @@ namespace Assets.Scripts
         private float smoothInputMagnitude;
         private float smoothmoveVelocity;
         private Vector3 velocity;
+        private List<ParticleSystem> stepEffects = new List<ParticleSystem>();
 
         private Rigidbody _rigidbody;
         private bool isCatched;
         public event Action OnGameOverEvent;
         public event Action OnWinEvent;
 
+        public Vector3 Velocity
+        {
+            get { return velocity; }
+        }
+
 
         private void Awake()
         {
             isCatched = false;
             _rigidbody = GetComponent<Rigidbody>();
+            foreach (var effect in stepEffectGO.GetComponentsInChildren<ParticleSystem>())
+            {
+                effect.Stop();
+                stepEffects.Add(effect);
+            }
         }
 
         private void Update()
@@ -56,11 +69,22 @@ namespace Assets.Scripts
             var targetAngle = Mathf.Atan2(tempVector.x, tempVector.z) * Mathf.Rad2Deg;
             angle = Mathf.LerpAngle(angle, targetAngle, Time.deltaTime * turnSpeed * inputMagnitude);
             velocity = transform.forward * movementSpeed * smoothInputMagnitude;
+
+            if (Input.GetAxisRaw("Horizontal") != 0 || Input.GetAxisRaw("Vertical") != 0)
+            {
+                foreach (var effect in stepEffects)
+                {
+                    if (!effect.isPlaying)
+                    {
+                        effect.Play();
+                    }
+                }
+            }
         }
         private void Move()
         {
             _rigidbody.MoveRotation(Quaternion.Euler(Vector3.up * angle));
-            _rigidbody.MovePosition(transform.position + velocity * Time.deltaTime);
+            _rigidbody.MovePosition(transform.position + Velocity * Time.deltaTime);
         }
 
         private void OnCollisionEnter(Collision collision)

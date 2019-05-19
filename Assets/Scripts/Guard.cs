@@ -46,9 +46,9 @@ public class Guard : MonoBehaviour
         if (!disabled)
         {
             TryToFindPlayer();
+            Wandering(Time.deltaTime);
             if (!isSeePlayer && !isHearPlayer)
             {
-                Wandering(Time.deltaTime);
                 LoseThePlayer();
             }
         }
@@ -90,10 +90,10 @@ public class Guard : MonoBehaviour
 
         if (tempVector.sqrMagnitude <= Mathf.Pow(viewDistance, 2))
         {
-            OnEventHearingThePlayer?.Invoke();
+            CanHearThePlayer();
             if (tempAngle <= _angleOfView / 2)
             {
-                OnEventSeingThePlayer?.Invoke();
+                CanSeeThePlayer();
             }
         }
         else
@@ -113,7 +113,7 @@ public class Guard : MonoBehaviour
         _light.color = Color.yellow;
         _navMeshAgent.SetDestination(transform.position);
 
-        transform.Rotate(new Vector3(transform.position.x, transform.position.y + 100 * Time.deltaTime));
+        transform.Rotate(new Vector3(0, transform.position.y + 100 * Time.deltaTime));
     }
     private void SeeThePlayer()
     {
@@ -126,6 +126,29 @@ public class Guard : MonoBehaviour
     {
         _navMeshAgent.speed = 4;
         _light.color = Color.white;
+    }
+
+    #endregion
+
+    #region Checks
+
+    private void CanHearThePlayer()
+    {
+        if (_player.Velocity.sqrMagnitude != 0)
+        {
+            OnEventHearingThePlayer?.Invoke();
+        }
+        else
+        {
+            LoseThePlayer();
+        }
+    }
+    private void CanSeeThePlayer()
+    {
+        if (!Physics.Linecast(transform.position, _player.transform.position, 1 << LayerMask.NameToLayer("Obstacle")))
+        {
+            OnEventSeingThePlayer?.Invoke();
+        }
     }
 
     #endregion
