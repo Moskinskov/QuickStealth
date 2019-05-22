@@ -22,11 +22,7 @@ namespace Assets.Scripts
         private bool isCatched;
         public event Action OnGameOverEvent;
         public event Action OnWinEvent;
-
-        public Vector3 Velocity
-        {
-            get { return velocity; }
-        }
+        public bool _playerDontMove = true;
 
 
         private void Awake()
@@ -70,7 +66,8 @@ namespace Assets.Scripts
             angle = Mathf.LerpAngle(angle, targetAngle, Time.deltaTime * turnSpeed * inputMagnitude);
             velocity = transform.forward * movementSpeed * smoothInputMagnitude;
 
-            if (Input.GetAxisRaw("Horizontal") != 0 || Input.GetAxisRaw("Vertical") != 0)
+            _playerDontMove = Input.GetAxisRaw("Horizontal") == 0 && Input.GetAxisRaw("Vertical") == 0;
+            if (!_playerDontMove)
             {
                 foreach (var effect in stepEffects)
                 {
@@ -84,7 +81,7 @@ namespace Assets.Scripts
         private void Move()
         {
             _rigidbody.MoveRotation(Quaternion.Euler(Vector3.up * angle));
-            _rigidbody.MovePosition(transform.position + Velocity * Time.deltaTime);
+            _rigidbody.MovePosition(transform.position + velocity * Time.deltaTime);
         }
 
         private void OnCollisionEnter(Collision collision)

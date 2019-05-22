@@ -1,153 +1,117 @@
-﻿using Assets.Scripts;
-using System;
+﻿using Assets.Scripts.GuardItems;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
-using Random = UnityEngine.Random;
 
-[RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(EnemyPatrol), typeof(EnemyBrain))]
 public class Guard : MonoBehaviour
 {
-    [SerializeField, Header("Patrol properties")] private float moveRadius = 10;
-    [SerializeField] private float minMoveDelay = 4;
-    [SerializeField] private float maxMoveDelay = 10;
-    [SerializeField] private float viewDistance = 5;
-    [SerializeField] private float _angleOfView = 30;
-    private Vector3 startPosition;
-    private Vector3 currentDestination;
-    private float changePosTime;
+    [SerializeField] private GameObject seeEffectsGO;
+    [SerializeField] private GameObject hearEffectsGO;
 
-    private Player _player;
-    private NavMeshAgent _navMeshAgent;
+    private EnemyBrain _brain;
+    private EnemyPatrol _patrol;
+    private List<ParticleSystem> seeEffects = new List<ParticleSystem>();
+    private List<ParticleSystem> hearEffects = new List<ParticleSystem>();
     private Light _light;
-    private bool isHearPlayer;
-    private bool isSeePlayer;
     private bool disabled;
-
-    public event Action OnEventHearingThePlayer;
-    public event Action OnEventSeingThePlayer;
 
     private void Start()
     {
-        startPosition = transform.position;
-        changePosTime = Random.Range(minMoveDelay, maxMoveDelay);
-        _player = FindObjectOfType<Player>();
-        _navMeshAgent = GetComponent<NavMeshAgent>();
-        _light = GetComponentInChildren<Light>();
-        _light.spotAngle = _angleOfView;
+        _brain = GetComponent<EnemyBrain>();
+        _patrol = GetComponent<EnemyPatrol>();
 
-        OnEventHearingThePlayer += HearThePlayer;
-        OnEventSeingThePlayer += SeeThePlayer;
-        _player.OnWinEvent += GameOver;
-        _player.OnGameOverEvent += GameOver;
+        _brain?.OnStart();
+        _patrol?.OnStart();
+
+        _brain.PlayerRef.OnWinEvent += GameOver;
+        _brain.PlayerRef.OnGameOverEvent += GameOver;
+        _brain.OnEventHearingThePlayer += HearThePlayer;
+        _brain.OnEventSeingThePlayer += SeeThePlayer;
+        _brain.OnEventLoseThePlayer += LoseThePlayer;
+
+        _light = GetComponentInChildren<Light>();
+        _light.spotAngle = _brain.AngleOfView;
+
+        foreach (var effect in seeEffectsGO.GetComponentsInChildren<ParticleSystem>())
+        {
+            seeEffects.Add(effect);
+            effect.gameObject.SetActive(false);
+        }
+        foreach (var effect in hearEffectsGO.GetComponentsInChildren<ParticleSystem>())
+        {
+            hearEffects.Add(effect);
+            effect.gameObject.SetActive(false);
+        }
+
         disabled = false;
+    }
+
+    private void OnValidate()
+    {
+        _brain = GetComponent<EnemyBrain>();
+        _patrol = GetComponent<EnemyPatrol>();
     }
     protected void Update()
     {
         if (!disabled)
         {
-            TryToFindPlayer();
-            Wandering(Time.deltaTime);
-            if (!isSeePlayer && !isHearPlayer)
-            {
-                LoseThePlayer();
-            }
+            _brain?.OnUpdate();
+            _patrol?.OnUpdate();
         }
     }
-
-    protected void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, viewDistance);
-    }
-
-    #region Patrol methods
-
-    /// <summary>
-    /// Блуждание
-    /// </summary>
-    /// <param name="deltaTime">спустя "время"</param>
-    private void Wandering(float deltaTime)
-    {
-        changePosTime -= deltaTime;
-        if (changePosTime <= 0)
-        {
-            RandomMove();
-            changePosTime = Random.Range(minMoveDelay, maxMoveDelay);
-        }
-    }
-
-    private void RandomMove()
-    {
-        currentDestination =
-            Quaternion.AngleAxis(Random.Range(0, 360), Vector3.up) * new Vector3(moveRadius, 0, 0) + startPosition;
-        _navMeshAgent.SetDestination(currentDestination);
-    }
-
-    private void TryToFindPlayer()
-    {
-        Vector3 tempVector = _player.transform.position - transform.position;
-        float tempAngle = Vector3.Angle(transform.forward, tempVector);
-
-        if (tempVector.sqrMagnitude <= Mathf.Pow(viewDistance, 2))
-        {
-            CanHearThePlayer();
-            if (tempAngle <= _angleOfView / 2)
-            {
-                CanSeeThePlayer();
-            }
-        }
-        else
-        {
-            isHearPlayer = false;
-            isSeePlayer = false;
-        }
-    }
-
-    #endregion
 
     #region Reactions
 
     private void HearThePlayer()
     {
-        isHearPlayer = true;
         _light.color = Color.yellow;
-        _navMeshAgent.SetDestination(transform.position);
-
+        _patrol.MeshAgent.SetDestination(transform.position);
         transform.Rotate(new Vector3(0, transform.position.y + 100 * Time.deltaTime));
+        foreach (var effect in hearEffects)
+        {
+            if (!effect.IsAlive())
+            {
+                effect.gameObject.SetActive(true);
+                if (!effect.isPlaying)
+                    effect.Play();
+            }
+        }
+        foreach (var effect in seeEffects)
+        {
+            effect.gameObject.SetActive(false);
+        }
     }
     private void SeeThePlayer()
     {
-        isSeePlayer = true;
         _light.color = Color.red;
-        _navMeshAgent.speed = 10;
-        _navMeshAgent.SetDestination(_player.transform.position);
+        _patrol.MeshAgent.speed = _patrol.MaxMoveSpeed;
+        _patrol.MeshAgent.SetDestination(_brain.PlayerRef.transform.position);
+
+        foreach (var effect in seeEffects)
+        {
+            if (!effect.IsAlive())
+            {
+                effect.gameObject.SetActive(true);
+                if (!effect.isPlaying)
+                    effect.Play();
+            }
+        }
+        foreach (var effect in hearEffects)
+        {
+            effect.gameObject.SetActive(false);
+        }
     }
     private void LoseThePlayer()
     {
-        _navMeshAgent.speed = 4;
+        _patrol.MeshAgent.speed = _patrol.OrigMoveSpeed;
         _light.color = Color.white;
-    }
-
-    #endregion
-
-    #region Checks
-
-    private void CanHearThePlayer()
-    {
-        if (_player.Velocity.sqrMagnitude != 0)
+        foreach (var effect in seeEffects)
         {
-            OnEventHearingThePlayer?.Invoke();
+            effect.gameObject.SetActive(false);
         }
-        else
+        foreach (var effect in hearEffects)
         {
-            LoseThePlayer();
-        }
-    }
-    private void CanSeeThePlayer()
-    {
-        if (!Physics.Linecast(transform.position, _player.transform.position, 1 << LayerMask.NameToLayer("Obstacle")))
-        {
-            OnEventSeingThePlayer?.Invoke();
+            effect.gameObject.SetActive(false);
         }
     }
 
@@ -156,5 +120,10 @@ public class Guard : MonoBehaviour
     private void GameOver()
     {
         disabled = true;
+    }
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, _brain.ViewDistance);
     }
 }
